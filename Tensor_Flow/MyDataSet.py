@@ -20,12 +20,13 @@ class Datasets(object):
 		all_labels = numpy.concatenate((self.train.labels, self.validation.labels, self.test.labels))
 		all_codes = numpy.concatenate((self.train.code, self.validation.code, self.test.code))
 		all_dates = numpy.concatenate((self.train.date, self.validation.date, self.test.date))
-		return all_images, all_labels, all_codes, all_dates
+		all_profit = numpy.concatenate((self.train.profit, self.validation.profit, self.test.profit))
+		return all_images, all_labels, all_codes, all_dates, all_profit
 
 
 class DataSet(object):
 
-	def __init__(self, images, labels, fake_data=False, one_hot=False, code=[], date=[]):
+	def __init__(self, images, labels, fake_data=False, one_hot=False, code=[], date=[], profit=[]):
 		"""Construct a DataSet. one_hot arg is used only if fake_data is true."""
 
 		if fake_data:
@@ -58,6 +59,12 @@ class DataSet(object):
 		else:
 			assert len(date) == self._num_examples
 			self.date = date
+
+		if len(profit) == 0 and not fake_data:
+			self.profit = None
+		else:
+			assert len(profit) == self._num_examples
+			self.profit = profit
 
 		self._images = images
 		self._labels = labels

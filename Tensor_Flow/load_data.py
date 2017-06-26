@@ -84,12 +84,14 @@ def sample_generator_exm(data):
 	return sample
 
 
-def collect_data(sp_generator=sample_generator_exm, is_sql_con=False, limit=None, end_date=None):
+def collect_data(sp_generator=sample_generator_exm, is_sql_con=False, limit=None,
+                 end_date=None):
 	df = get_stock_list()
 	samples = list()
 	labels = list()
 	codes = list()
 	dates = list()
+	profits = list()
 	if is_sql_con:
 		conn = get_conn()
 	else:
@@ -102,12 +104,13 @@ def collect_data(sp_generator=sample_generator_exm, is_sql_con=False, limit=None
 
 	for i, code in enumerate(code_list):
 		data = get_data(code, conn)
-		sample, label, date_s = sp_generator(data)
+		sample, label, date_s, profit_s = sp_generator(data)
 		if sample:
 			samples = samples + sample
 			labels = labels + label
 			codes = codes + [code] * len(label)
 			dates = dates + date_s
+			profits = profits + profit_s
 		if i % 100 == 0:
 			print('get {} stocks'.format(i))
 
@@ -123,12 +126,12 @@ def collect_data(sp_generator=sample_generator_exm, is_sql_con=False, limit=None
 	if len(dates) > 0 and isinstance(dates[0], float):
 		dates = [matlabTime_to_Python(date) for date in dates]
 
-	c = set_datasets(samples, labels, np.array(codes), np.array(dates))
+	c = set_datasets(samples, labels, np.array(codes), np.array(dates), np.array(profits))
 	# list 类不支持list作为指针
 	return c
 
 
-def set_datasets(samples, labels, codes, dates):
+def set_datasets(samples, labels, codes, dates, profits):
 	length = samples.shape[0]
 	k = list(range(length))
 	random.shuffle(k)
@@ -136,11 +139,14 @@ def set_datasets(samples, labels, codes, dates):
 	idx_2 = int(length * 0.75)
 
 	train = MyDataSet.DataSet(samples[k[:idx_1], :], labels[k[:idx_1], :],
-	                          code=codes[k[:idx_1]], date=dates[k[:idx_1]])
+	                          code=codes[k[:idx_1]], date=dates[k[:idx_1]],
+	                          profit=profits[k[:idx_1]])
 	validation = MyDataSet.DataSet(samples[k[idx_1:idx_2], :], labels[k[idx_1:idx_2], :],
-	                               code=codes[k[idx_1:idx_2]], date=dates[k[idx_1:idx_2]])
+	                               code=codes[k[idx_1:idx_2]], date=dates[k[idx_1:idx_2]],
+	                               profit=profits[k[idx_1:idx_2]])
 	test = MyDataSet.DataSet(samples[k[idx_2:], :], labels[k[idx_2:], :],
-	                         code=codes[k[idx_2:]], date=dates[k[idx_2:]])
+	                         code=codes[k[idx_2:]], date=dates[k[idx_2:]],
+	                         profit=profits[k[idx_2:]])
 
 	return MyDataSet.Datasets(train=train, validation=validation, test=test)
 

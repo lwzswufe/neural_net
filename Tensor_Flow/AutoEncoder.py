@@ -110,13 +110,13 @@ class AutoEncoder(object):
 		if self.data.train.image_size == 784:
 			plt.ioff()
 
-		all_images, all_labels, all_codes, all_dates = self.data.get_all()
+		all_images, all_labels, all_codes, all_dates, all_profits = self.data.get_all()
 		encodes = encoded.eval(session=self.sess, feed_dict={tf_x: all_images})
 		with open('D:\\Cache\\encodes.pic', 'wb') as f:
-			pickle.dump([encodes, all_codes, all_dates], f)
+			pickle.dump([encodes, all_codes, all_dates, all_profits], f)
 
 
-def sample_generator(data):
+def sample_generator(data, n_day=5):
 	data = data[data[:, 7] > 0, :]
 	length = data.shape[0]
 	sample_length = 100
@@ -124,8 +124,9 @@ def sample_generator(data):
 	sample = list()
 	label = list()
 	date_s = list()
+	profit_s = list()
 	if length < sample_length:
-		return [], [], []
+		return [], [], [], []
 	else:
 		data[:, 5] = np.log(data[:, 5])
 		st = length % interval
@@ -136,8 +137,10 @@ def sample_generator(data):
 			sample.append(k - np.mean(k) + 0.5)
 			label.append(np.ones([1, 1]))
 			date_s.append(data[ed - 1, 0])
+			nday_profit = data[min(ed - 1 + n_day, length - 1), 5] - data[ed - 1, 5]
+			profit_s.append(nday_profit)
 			st, ed = st + interval, ed + interval
-	return sample, label, date_s
+	return sample, label, date_s, profit_s
 
 
 if __name__ == '__main__':
@@ -147,7 +150,7 @@ if __name__ == '__main__':
 	else:
 		c = load_data.collect_data(sample_generator, limit=0)
 		load_data.save(c, fn)
-	param = Param(train_times=10000, learning_rate=0.001)
+	param = Param(train_times=20000, learning_rate=0.002)
 	ae = AutoEncoder(param)
 	ae.input_data(data=c)
 	ae.train()
