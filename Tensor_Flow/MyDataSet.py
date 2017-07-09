@@ -34,7 +34,7 @@ class DataSet(object):
 			self.one_hot = one_hot
 		else:
 			assert images.shape[0] == labels.shape[0], (
-				'images.shape: %s labels.shape: %s' % (images.shape,labels.shape))
+				'images.shape: %s labels.shape: %s' % (images.shape, labels.shape))
 			self._num_examples = images.shape[0]
 			if len(images.shape) >= 3:
 				self.image_size = images.shape[1] * images.shape[2]
@@ -45,8 +45,8 @@ class DataSet(object):
 			self.lebal_size = labels.shape[1]
 			# Convert from [0, 255] -> [0.0, 1.0].
 			images = images.astype(numpy.float32)
-			if len(code) == 0:  # 导入图片数据
-				images = numpy.multiply(images, 1.0 / 255.0)
+			# if len(code) == 0:  # 导入图片数据
+			#	images = numpy.multiply(images, 1.0 / 255.0)
 
 		if len(code) == 0 and not fake_data:
 			self.code = None
