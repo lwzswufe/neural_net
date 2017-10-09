@@ -186,6 +186,39 @@ def plot(codes, dates, length=100):
 	plt.legend(codes)
 
 
+def load_matlab_dataset(fn='D:\\Cache\\macd_model.mat'):
+	data = sio.loadmat(fn)
+	images = data['Signal']
+	labels = data['Labels']
+	codes = data['Code']
+	dates = data['Date']
+	profits = data['Profit']
+
+	if labels.shape[1] == 1 and sum(labels == 1) != sum(labels == 0):
+		print('sample numbers in class 0 and class 1 is not equal, we wil adjust the number of classes')
+		num_1 = sum(labels == 1)
+		num_0 = sum(labels == 0)
+		rand = np.random.random(labels.shape)
+		if num_1 > num_0:
+			rand[labels == 0] = 1
+		else:
+			rand[labels == 1] = 1
+		p = abs(num_0 - num_1) / max(num_0, num_1)  # 接受概率
+
+		labels = labels[rand > p]
+		labels = np.transpose([labels, 1 - labels])
+		images = images[rand.flatten() > p]
+
+		if dates.shape[0] > 0:
+			dates = dates[rand > p]
+		if codes.shape[0] > 0:
+			codes = codes[rand > p]
+		if profits.shape[0] > 0:
+			profits = profits[rand > p]
+
+	return set_datasets(images, labels, codes, dates, profits)
+
+
 if __name__ == '__main__':
 	# data = from_mat('SH600000')
 	print(matlabTime_to_Python())

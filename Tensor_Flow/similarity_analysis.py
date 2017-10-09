@@ -9,13 +9,13 @@ import time
 
 
 class similarity(object):
-	def __init__(self, fn='D:\\Cache\\encodes.pic'):
+	def __init__(self, fn='D:\\Cache\\ckpt_dir\\encodes.pic'):
 		with open(fn, 'rb') as f:
 			data = pickle.load(f)
 		self.encodes = data[0]
-		self.code = data[1]
-		self.date = data[2]
-		self.profits = data[3]
+		self.code = data[2]
+		self.date = data[3]
+		self.profits = data[4]
 		self.class_encodes = list()
 		self.class_num = []
 		self.class_list = []
@@ -53,19 +53,37 @@ class similarity(object):
 		rank = d.argsort()
 		return d, rank
 
-	def get_nearest(self, i=None, num=5, d=None, rank=None):
-		if d is None and i is None:
-			print('input error')
-		if d is None:
-			d, rank = self.sorted_distance(i)
+	def get_nearest(self, i=None, num=5, d=None, rank=None, code=None, date=None, filepath=None):
+		if code is not None:
+			ii = self.find(code, date)
+		else:
+			ii = i
 
-		if i is not None:
-			print("target: code: {} date: {}".format(self.code[i], self.date[i]))
+		if d is None and ii is None:
+			print('input error')
+
+		if d is None:
+			d, rank = self.sorted_distance(ii)
+
+		if ii is not None:
+			print("target_code: {} date: {}".format(str(self.code[ii]).zfill(6), self.date[ii]))
 
 		for j in range(num):
 			idx = round(rank[j])
-			print("rank:{} code: {} date: {} distance:{:.4f} profit:{:.4f}".format(
-				j, self.code[idx], self.date[idx], d[idx], self.profits[idx]))
+			context = "rank:{} code: {} date: {} distance:{:.4f} profit:{:.4f}".format(
+				j, str(self.code[idx]).zfill(6), self.date[idx], d[idx], self.profits[idx])
+			print(context)
+
+		if filepath is not None:
+			heads = ('rank, code, date, distance, profit\n')
+			filename = filepath + str(self.code[ii]).zfill(6) + '_' + str(self.date[ii]) + '.csv'
+			with open(filename, 'w') as f:
+				f.write(heads)
+				for j in range(num):
+					idx = round(rank[j])
+					context = "{rank},{code},{date},{distance:.4f},{profit:.4f}\n".format(
+				rank=j, code=str(self.code[idx]).zfill(6), date=self.date[idx], distance=d[idx], profit=self.profits[idx])
+					f.write(context)
 
 	def plot_items(self, ids):
 		code_list = list()
@@ -80,11 +98,28 @@ class similarity(object):
 		self.get_nearest(i, num, d, rank)
 		self.plot_items(rank[:num])
 
-	def find(self, code, date):
-		for i, code_ in enumerate(self.code):
-			if code == code_ and self.date[i] == date:
-				return i
-		print('do not find code {} date {}'.format(code, date))
+	def find(self, code, date=None):
+		if isinstance(code, str):
+			if code.isdigit():
+				code = int(code)
+			else:
+				code = int(code[2:])
+
+		if date is None:
+			i_list = list()
+			date_list = list()
+			for i, code_ in enumerate(self.code):
+				if code == code_:
+					i_list.append(i)
+					date_list.append(self.date[i])
+
+			if len(i_list) > 0:
+				return i_list[np.argmax(date_list)]
+		else:
+			for i, code_ in enumerate(self.code):
+				if code == code_ and self.date[i] == date:
+					return i
+		print('do not find code {} date {}'.format(str(code).zfill(6), date))
 		return None
 
 	def classify(self, class_distance=0.3):
@@ -114,7 +149,10 @@ class similarity(object):
 				return j
 		return False
 
-	def recommend(self, date):
+	def recommend(self, date=None):
+		if date is None:
+			c = time.strptime("Ymd", time.localtime())
+			date = c[0] * 10000 + c[1] * 100 + c[2]
 		profit_mean = list()
 		profit_std = list()
 		distance_mean = list()
@@ -142,11 +180,12 @@ class similarity(object):
 		profit_mean_arr = -np.array(profit_mean)
 		rank = np.argsort(profit_mean_arr)
 
-		for i in range(40):
+		print('recommend stock:')
+		for i in range(min(40, len(rank))):
 			idx = rank[i]
 			print("rank:{} code: {} mean_distance:{:.4f} mean_profit:{:.4f} profit std:{:.4f}"
-			      " true profit:{:.4f} win ratio:{:.4f}".format(i, code_list[idx], distance_mean[idx],
-			      profit_mean[idx], profit_std[idx], self.profits[date_list[idx]], win_ratio[idx]))
+				  " true profit:{:.4f} win ratio:{:.4f}".format(i, str(code_list[idx]).zfill(6), distance_mean[idx],
+																profit_mean[idx], profit_std[idx], self.profits[date_list[idx]], win_ratio[idx]))
 
 	def expected_profit(self, i, num=40, date='00-01-01 00:00:00', class_id=0):
 		d, idxs = self.get_distances_from(i, max_distance=0.03, class_id=class_id)
@@ -196,11 +235,24 @@ def get_stock_list(fname='D:\\data\\S.csv'):
 	return np.array(df.code)
 
 
-if __name__ == '__main__':
+def daily():
 	s = similarity()
 	d, rank = s.sorted_distance(203)
 	s.get_nearest(i=203, d=d, rank=rank)
+	s.get_nearest(code='SH600006')
+	s.get_nearest(i=203, d=d, rank=rank)
 	# s.plot_nearest(2, num=21)
 	s.classify()
-	s.recommend(date='17-06-23 00:00:00')
+	s.recommend()
+
+
+if __name__ == '__main__':
+	s = similarity()
+	d, rank = s.sorted_distance(203)
+	s.get_nearest(code='SH600006', filepath='D:\\Cache\\')
+	s.get_nearest(i=203, d=d, rank=rank)
+	# s.plot_nearest(2, num=21)
+	s.find('SZ000001')
+	s.classify()
+	s.recommend(date=20170329)
 	pass

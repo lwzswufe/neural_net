@@ -10,11 +10,12 @@ from Tensor_Flow import MyDataSet
 
 class Param(object):
 	def __init__(self, dataset_path='D:\\Code\\Code\\neural_net\\Tensor_Flow\\MNIST_data',
-	             batch_size=200, lr_g=0.002, lr_d=0.002, show_img_num=9, train_times=1000,
-	             fig_size=784, n_ideas=7, h_dim=10):
+	             batch_size=200, lr_g=0.002, lr_d=0.002, lr_c=0.002, show_img_num=10,
+	             train_times=1000, fig_size=784, n_ideas=3, h_dim=10):
 		self.batch_size = batch_size
 		self.lr_d = lr_d         # learning rate
 		self.lr_g = lr_g
+		self.lr_c = lr_c
 		self.show_img_num = show_img_num     # 可视化显示图片数量
 		self.train_times = train_times
 		self.fig_size = fig_size
@@ -30,7 +31,6 @@ class Param(object):
 class gan(object):
 	def __init__(self, param=Param(), is_plot=False):
 		self.param = param
-		self.pp = self.get_ideas()
 		self.data = ''
 		self.coder = Codes()
 		self.is_plot = is_plot
@@ -45,36 +45,60 @@ class gan(object):
 			self.param.h_dim = self.data.labels.shape[1]
 
 	def get_ideas(self):     # painting from the famous artist (real target)
-		fake_data = np.random.randn(self.param.batch_size, self.param.n_ideas)
-		return fake_data
+		# fake_data = np.random.randn(self.param.batch_size, self.param.n_ideas)
+		eye_data = np.eye(self.param.h_dim, self.param.h_dim)
+		fake_data = np.repeat(eye_data, int(self.param.batch_size/self.param.h_dim) - 1, axis=0)
+		fake_data = np.concatenate((eye_data, fake_data), axis=0)
+		return eye_data
 
 	def train_Gan(self):
 		with tf.variable_scope('Generator'):
-			G_in = tf.placeholder(tf.float32, [None, self.param.n_ideas])          # random ideas (could from normal distribution)
-			G_l1 = tf.layers.dense(G_in, 8, tf.nn.sigmoid)
+			G_label = tf.placeholder(tf.float32, [None, self.param.h_dim])          # random ideas (could from normal distribution)
+			# G_label = tf.eye(self.param.h_dim, self.param.h_dim)
+			G_l0 = tf.layers.dense(G_label, 8, tf.nn.sigmoid)
+			G_l1 = tf.layers.dense(G_l0, 50, tf.nn.sigmoid)
 			G_out = tf.layers.dense(G_l1, self.param.x_dim, tf.nn.sigmoid)               # making a painting from these random ideas
 
+		real_art = tf.placeholder(tf.float32, [None, self.param.x_dim], name='real_in')
+		# receive art work from the famous artist
 		with tf.variable_scope('Discriminator'):
-			real_art = tf.placeholder(tf.float32, [None, self.param.x_dim], name='real_in')   # receive art work from the famous artist
-
 			D_l0 = tf.layers.dense(real_art, self.param.x_dim, tf.nn.relu, name='l')
-			prob_artist0 = tf.layers.dense(D_l0, self.param.h_dim, tf.nn.sigmoid, name='out')              # probability that the art work is made by artist
+			prob_real = tf.layers.dense(D_l0, 1, tf.nn.sigmoid, name='out')              # probability that the art work is made by artist
 			# reuse layers for generator
 			D_l1 = tf.layers.dense(G_out, self.param.x_dim, tf.nn.relu, name='l', reuse=True)            # receive art work from a newbie like G
-			prob_artist1 = tf.layers.dense(D_l1, self.param.h_dim, tf.nn.sigmoid, name='out', reuse=True)  # probability that the art work is made by artist
+			prob_fake = tf.layers.dense(D_l1, 1, tf.nn.sigmoid, name='out', reuse=True)  # probability that the art work is made by artist
+
+		with tf.variable_scope('Classifier'):
+			C_l0 = tf.layers.dense(real_art, self.param.x_dim, tf.nn.relu, name='c_in')
+			prob_real_class = tf.layers.dense(C_l0, self.param.h_dim, tf.nn.sigmoid, name='c_out')
+
+			C_l1 = tf.layers.dense(G_out, self.param.x_dim, tf.nn.relu, name='c_in', reuse=True)            # receive art work from a newbie like G
+			prob_fake_class = tf.layers.dense(C_l1, self.param.h_dim, tf.nn.sigmoid, name='c_out', reuse=True)  # probability that the art work is made by artist
 
 		y_label = tf.placeholder(tf.float32, [None, self.param.h_dim])
+		z = tf.placeholder(tf.float32, [None, 1])
 
 		# D0_loss = tf.diag_part(tf.matmul(prob_artist0, y_label, transpose_b=True))
-		D0_loss = tf.reduce_mean(tf.square(prob_artist0 - y_label))
-		D_loss = - tf.reduce_mean(-tf.log(D0_loss) + tf.log(1 - tf.reduce_mean(prob_artist1)))
-		G_loss = tf.log(1 - tf.reduce_max(prob_artist1))
+		real_loss = tf.losses.sigmoid_cross_entropy(multi_class_labels=tf.ones_like(z), logits=prob_real)
+		fake_loss = tf.losses.sigmoid_cross_entropy(multi_class_labels=tf.zeros_like(z), logits=prob_fake)
+		g_loss = tf.losses.sigmoid_cross_entropy(multi_class_labels=tf.ones_like(z), logits=prob_fake)
+		c_real_loss = tf.losses.softmax_cross_entropy(onehot_labels=y_label, logits=prob_real_class)
+		c_fake_loss = tf.losses.softmax_cross_entropy(onehot_labels=G_label, logits=prob_fake_class)
+		#c_fake_loss = tf.losses.softmax_cross_entropy(onehot_labels=tf.reduce_max(tf.ones_like(y_label), axis=1),
+		#                                              logits=tf.reduce_max(prob_fake_class, axis=1))
+
+		D_loss = tf.reduce_mean(real_loss) + tf.reduce_mean(fake_loss)
+		G_loss = tf.reduce_mean(g_loss) + tf.reduce_mean(c_fake_loss)
+		C_loss = tf.reduce_mean(c_real_loss)
+
 		# G_loss = tf.reduce_mean(tf.log(y_label - prob_artist1))
 
 		train_D = tf.train.AdamOptimizer(self.param.lr_d).minimize(
 			D_loss, var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator'))
 		train_G = tf.train.AdamOptimizer(self.param.lr_g).minimize(
 			G_loss, var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator'))
+		train_C = tf.train.AdamOptimizer(self.param.lr_c).minimize(
+			C_loss, var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Classifier'))
 
 		sess = tf.Session()
 		sess.run(tf.global_variables_initializer())
@@ -102,17 +126,17 @@ class gan(object):
 		for step in range(self.param.train_times):
 			real_data, labels = self.data.next_batch(self.param.batch_size)          # real painting from artist
 			G_ideas = self.get_ideas()
-			feed_dict = {G_in: G_ideas, real_art: real_data, y_label: labels}
-			G_paintings, pa0, loss_l, d = sess.run([G_out, prob_artist0, D_loss, D0_loss, train_D, train_G]
-			                                    , feed_dict)[0:4]
+			feed_dict = {G_label: G_ideas, real_art: real_data, y_label: labels, z: np.zeros([labels.shape[0], 1])}
+			G_paintings, pa0, p_f= sess.run([G_out, prob_real_class, prob_fake, train_D, train_G, train_C]
+			                                    , feed_dict)[0:3]
 			if step > flag:
 				precision = np.mean(np.argmax(labels, axis=1) == np.argmax(pa0, axis=1))
-				print(step, ':', precision)
+				print(step, ':', precision, "fake_ratio: ", np.mean(p_f))
 				flag = flag * 1.1 + 10
 
-				feed_dict = {G_in: G_ideas, real_art: self.data.images[:self.param.show_img_num],
-				             y_label:self.data.labels[:self.param.show_img_num]}
-				G_paintings, pa0 = sess.run([G_out, prob_artist0], feed_dict)
+				feed_dict = {G_label: G_ideas[:self.param.show_img_num], real_art: self.data.images[:self.param.show_img_num],
+				             y_label:self.data.labels[:self.param.show_img_num], z: np.zeros([labels.shape[0], 1])}
+				G_paintings, pa0, g_label = sess.run([G_out, prob_real_class, G_label], feed_dict)
 				if self.is_plot:
 					plot_data = self.coder.decoder(G_paintings)
 					for i in range(self.param.show_img_num):
@@ -121,7 +145,9 @@ class gan(object):
 						a[1][i].set_xticks(())
 						a[1][i].set_yticks(())
 					plt.draw()
+					print(np.argmax(self.data.labels[:self.param.show_img_num], axis=1))
 					print(np.argmax(pa0, axis=1))
+					print(np.argmax(g_label, axis=1))
 					plt.pause(0.1)
 			# train and get results
 		if self.is_plot:
@@ -160,7 +186,7 @@ def sigmoid(x):
 
 
 if __name__ == '__main__':
-	param = Param(train_times=20000)
+	param = Param(train_times=20000, lr_c=0.002, lr_g=0.002, lr_d=0.002, batch_size=200)
 	g = gan(param, is_plot=True)
 	g.get_data()
 	g.train_Gan()
