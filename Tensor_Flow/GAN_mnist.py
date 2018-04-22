@@ -139,7 +139,7 @@ class gan(object):
         c_fake_loss = tf.losses.softmax_cross_entropy(onehot_labels=G_label, logits=prob_fake_class)
 
         D_loss = tf.reduce_mean(real_loss) + tf.reduce_mean(fake_loss)
-        G_loss = tf.reduce_mean(g_loss) + tf.reduce_mean(c_fake_loss)
+        G_loss = tf.reduce_mean(g_loss) * (tf.reduce_mean(c_fake_loss) + 3)
         C_loss = tf.reduce_mean(c_real_loss)
         A_loss = tf.losses.mean_squared_error(labels=real_art, predictions=R_de_1)
 
@@ -201,10 +201,12 @@ class gan(object):
                              real_art: real_data,
                              y_label: labels,
                              z: np.zeros([labels.shape[0], 1])}
-                G_paintings, pa0, g_label = sess.run([G_out, prob_real_class, G_label], feed_dict)
+                G_paintings, real_class, g_label, fake_class = \
+                    sess.run([G_out, prob_real_class, G_label, prob_fake_class], feed_dict)
 
-                precision = np.mean(np.argmax(labels, axis=1) == np.argmax(pa0, axis=1))
-                print(step, ':', precision, "fake_ratio: ", np.mean(p_f))
+                p_real = np.mean(np.argmax(labels, axis=1) == np.argmax(real_class, axis=1))
+                p_fake = np.mean(np.argmax(labels, axis=1) == np.argmax(fake_class, axis=1))
+                print(step, 'real_class:', p_real, "fake_class: ", p_fake, "fake_ratio: ", np.mean(p_f))
                 flag = flag * 1.1 + 10
 
                 if self.is_plot:
@@ -261,7 +263,7 @@ def sigmoid(x):
 
 
 if __name__ == '__main__':
-    param = Param(train_times=2000, lr_c=0.001, lr_g=0.001, lr_d=0.0002, lr_a=0.002, batch_size=200)
+    param = Param(train_times=2000, lr_c=0.0005, lr_g=0.0005, lr_d=0.0005, lr_a=0.002, batch_size=200)
     g = gan(param, is_plot=True)
     g.get_data()
     g.train_Gan()
