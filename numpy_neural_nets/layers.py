@@ -133,6 +133,52 @@ class LayerBase(ABC):
         }
 
 
+class NetBase(ABC):
+    def __init__(self, optimizer=None):
+        """An abstract base class inherited by all nerual network layers"""
+        self.X = []
+        self.act_fn = None
+        self.trainable = True
+        self.optimizer = OptimizerInitializer(optimizer)()
+
+        super().__init__()
+
+    @abstractmethod
+    def _init_params(self, **kwargs):
+        raise NotImplementedError
+
+    @abstractmethod
+    def forward(self, z, **kwargs):
+        raise NotImplementedError
+
+    @abstractmethod
+    def backward(self, out, **kwargs):
+        raise NotImplementedError
+
+    def freeze(self):
+        """
+        Freeze the layer parameters at their current values so they can no
+        longer be updated.
+        """
+        self.trainable = False
+
+    def unfreeze(self):
+        """Unfreeze the layer parameters so they can be updated."""
+        self.trainable = True
+
+    def flush_gradients(self):
+        """Erase all the layer's derived variables and gradients."""
+        assert self.trainable, "Layer is frozen"
+
+    def update(self, cur_loss=None):
+        """
+        Update the layer parameters using the accrued gradients and layer
+        optimizer. Flush all gradients once the update is complete.
+        """
+        assert self.trainable, "Layer is frozen"
+        self.flush_gradients()
+
+
 class DotProductAttention(LayerBase):
     def __init__(self, scale=True, dropout_p=0, init="glorot_uniform", optimizer=None):
         """
@@ -3349,7 +3395,7 @@ class Deconv2D(LayerBase):
 
 
 class RNNCell(LayerBase):
-    def __init__(self, n_out, act_fn="Tanh", init="glorot_uniform", optimizer=None):
+    def __init__(self, n_in, n_out, n_t, act_fn="Tanh", init="glorot_uniform", optimizer=None):
         """
         A single step of a vanilla (Elman) RNN.
 
@@ -3391,9 +3437,9 @@ class RNNCell(LayerBase):
         super().__init__(optimizer)
 
         self.init = init
-        self.n_in = None
+        self.n_in = n_in
         self.n_out = n_out
-        self.n_timesteps = None
+        self.n_timesteps = n_t
         self.act_fn = ActivationInitializer(act_fn)()
         self.parameters = {"Waa": None, "Wax": None, "ba": None, "bx": None}
         self.is_initialized = False
@@ -3858,11 +3904,10 @@ class LSTMCell(LayerBase):
             self.gradients[k] = np.zeros_like(v)
 
 
-class RNN(LayerBase):
-    def __init__(self, n_out, act_fn="Tanh", init="glorot_uniform", optimizer=None):
+class RNN(NetBase):
+    def __init__(self, n_in, n_out, n_t, act_fn="Tanh", init="glorot_uniform", optimizer=None):
         """
         A single vanilla (Elman)-RNN layer.
-
         Parameters
         ----------
         n_out : int
@@ -3882,9 +3927,9 @@ class RNN(LayerBase):
         super().__init__(optimizer)
 
         self.init = init
-        self.n_in = None
+        self.n_in = n_in
         self.n_out = n_out
-        self.n_timesteps = None
+        self.n_timesteps = n_t
         self.act_fn = ActivationInitializer(act_fn)()
         self.is_initialized = False
 
@@ -3892,6 +3937,7 @@ class RNN(LayerBase):
         self.cell = RNNCell(
             n_in=self.n_in,
             n_out=self.n_out,
+            n_t=self.n_timesteps,
             act_fn=self.act_fn,
             init=self.init,
             optimizer=self.optimizer,

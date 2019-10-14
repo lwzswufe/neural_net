@@ -107,15 +107,14 @@ def test_RNN():
     X = random_tensor((n_ex, n_in, n_t), standardize=True)
 
     # initialize RNN layer
-    rnn = RNN(n_out=n_out, optimizer=SGD())
+    rnn = RNN(n_in, n_out, n_t, optimizer=SGD())
     loss_cls = SquaredError()
-    param_dict = {"n_in": n_in,
-                  "n_out": n_out}
-    rnn.set_params(param_dict)
     for i in range(100):
         y_pred = rnn.forward(X)
         loss = loss_cls(y, y_pred)
-        rnn.backward(loss)
+        Z = np.dstack(rnn.derived_variables["Z"])
+        grad = loss_cls.grad(y, y_pred, Z, rnn.act_fn)
+        rnn.backward(grad)
         rnn.update()
         print("iter_{:03d} loss:{:.4f}".format(i + 1, np.sum(loss)))
 
