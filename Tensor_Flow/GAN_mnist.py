@@ -139,8 +139,9 @@ class gan(object):
         c_fake_loss = tf.losses.softmax_cross_entropy(onehot_labels=G_label, logits=prob_fake_class)
 
         D_loss = tf.reduce_mean(real_loss) + tf.reduce_mean(fake_loss)
-        G_loss = tf.reduce_mean(g_loss) * (tf.reduce_mean(c_fake_loss) + 3)
-        C_loss = tf.reduce_mean(c_real_loss)
+        G_loss = tf.log(1.0001 - tf.reduce_mean(c_fake_loss)) + \
+                 10 * tf.log(0.00000000001 + tf.reduce_mean(g_loss))
+        C_loss = tf.log(1.0001 - tf.reduce_mean(c_real_loss))
         A_loss = tf.losses.mean_squared_error(labels=real_art, predictions=R_de_1)
 
         # G_loss = tf.reduce_mean(tf.log(y_label - prob_artist1))
@@ -263,7 +264,7 @@ def sigmoid(x):
 
 
 if __name__ == '__main__':
-    param = Param(train_times=2000, lr_c=0.0005, lr_g=0.0005, lr_d=0.0005, lr_a=0.002, batch_size=200)
+    param = Param(train_times=20000, lr_c=0.0003, lr_g=0.0003, lr_d=0.0003, lr_a=0.001, batch_size=200)
     g = gan(param, is_plot=True)
     g.get_data()
     g.train_Gan()
