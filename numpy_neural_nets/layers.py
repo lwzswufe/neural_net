@@ -3562,7 +3562,7 @@ class RNNCell(LayerBase):
         dA_acc = self.derived_variables["dLdA_accumulator"]
 
         # initialize accumulator
-        if dA_acc is None:
+        if dA_acc is None or len(dA_acc) == 0:
             dA_acc = np.zeros_like(As[0])
 
         # get network weights for gradient calcs

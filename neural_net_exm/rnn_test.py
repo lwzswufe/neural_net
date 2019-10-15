@@ -1,6 +1,6 @@
 import numpy as np
+import external_module
 from layers import RNNCell, RNN
-# from ...layers.layers import RNNCell
 from torch_models import TorchRNNCell
 from losses import SquaredError
 from optimizers import SGD
@@ -97,10 +97,10 @@ def compare_RNNCell(N=None):
 
 
 def test_RNN():
-    n_ex = 5   # 样本数
-    n_in = 25
-    n_out = 1
-    n_t = 5
+    n_ex = 4   # 样本数
+    n_in = 25  # 输入数据维度
+    n_out = 1  # 输出数据维度
+    n_t = 5    # 时间周期数
     np.random.seed(0)
 
     y = np.random.random((n_ex, n_out, n_t))
@@ -109,7 +109,7 @@ def test_RNN():
     # initialize RNN layer
     rnn = RNN(n_in, n_out, n_t, optimizer=SGD())
     loss_cls = SquaredError()
-    for i in range(100):
+    for i in range(1000):
         y_pred = rnn.forward(X)
         loss = loss_cls(y, y_pred)
         Z = np.dstack(rnn.derived_variables["Z"])

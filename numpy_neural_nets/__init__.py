@@ -7,5 +7,4 @@ from . import wrappers
 from . import layers
 from . import initializers
 from . import modules
-from . import models
 from . import tests
