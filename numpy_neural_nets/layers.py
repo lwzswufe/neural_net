@@ -3602,7 +3602,9 @@ class RNNCell(LayerBase):
 class LSTMCell(LayerBase):
     def __init__(
         self,
+        n_in,
         n_out,
+        n_t,
         act_fn="Tanh",
         gate_fn="Sigmoid",
         init="glorot_uniform",
@@ -3657,9 +3659,9 @@ class LSTMCell(LayerBase):
         super().__init__(optimizer)
 
         self.init = init
-        self.n_in = None
+        self.n_in = n_in
         self.n_out = n_out
-        self.n_timesteps = None
+        self.n_timesteps = n_t
         self.act_fn = ActivationInitializer(act_fn)()
         self.gate_fn = ActivationInitializer(gate_fn)()
         self.parameters = {
@@ -3849,10 +3851,10 @@ class LSTMCell(LayerBase):
         dC_acc = self.derived_variables["dLdC_accumulator"]
 
         # initialize accumulators
-        if dA_acc is None:
+        if dA_acc is None or len(dA_acc) == 0:
             dA_acc = np.zeros_like(At)
 
-        if dC_acc is None:
+        if dC_acc is None or len(dC_acc) == 0:
             dC_acc = np.zeros_like(Ct)
 
         # Gradient calculations
@@ -3873,7 +3875,10 @@ class LSTMCell(LayerBase):
         dGut = dC * Cct * self.gate_fn.grad(_Gu)
         dGft = dC * C_prev * self.gate_fn.grad(_Gf)
 
-        dZ = dGft @ Wf.T + dGut @ Wu.T + dCct @ Wc.T + dGot @ Wo.T
+        try:
+            dZ = dGft @ Wf.T + dGut @ Wu.T + dCct @ Wc.T + dGot @ Wo.T
+        except ValueError as err:
+            print(err)
         dXt = dZ[:, self.n_out :]
 
         self.gradients["Wc"] += Zt.T @ dCct
@@ -4038,10 +4043,12 @@ class RNN(NetBase):
         self.flush_gradients()
 
 
-class LSTM(LayerBase):
+class LSTM(NetBase):
     def __init__(
         self,
+        n_in,
         n_out,
+        n_t,
         act_fn="Tanh",
         gate_fn="Sigmoid",
         init="glorot_uniform",
@@ -4070,9 +4077,9 @@ class LSTM(LayerBase):
         super().__init__(optimizer)
 
         self.init = init
-        self.n_in = None
+        self.n_in = n_in
         self.n_out = n_out
-        self.n_timesteps = None
+        self.n_timesteps = n_t
         self.act_fn = ActivationInitializer(act_fn)()
         self.gate_fn = ActivationInitializer(gate_fn)()
         self.is_initialized = False
@@ -4081,6 +4088,7 @@ class LSTM(LayerBase):
         self.cell = LSTMCell(
             n_in=self.n_in,
             n_out=self.n_out,
+            n_t=self.n_timesteps,
             act_fn=self.act_fn,
             gate_fn=self.gate_fn,
             init=self.init,
@@ -4147,7 +4155,7 @@ class LSTM(LayerBase):
         dLdX = []
         n_ex, n_out, n_t = dLdA.shape
         for t in reversed(range(n_t)):
-            dLdXt, _ = self.cell.backward(dLdA[:, :, t])
+            dLdXt = self.cell.backward(dLdA[:, :, t])
             dLdX.insert(0, dLdXt)
         dLdX = np.dstack(dLdX)
         return dLdX

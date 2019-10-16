@@ -1,7 +1,7 @@
 import numpy as np
 import external_module
-from layers import RNNCell, RNN
-from torch_models import TorchRNNCell
+from layers import LSTMCell, LSTM
+from torch_models import TorchLSTMCell
 from losses import SquaredError
 from optimizers import SGD
 
@@ -35,9 +35,9 @@ def random_tensor(shape, standardize=False):
     return X
 
 
-def compare_RNN(N=None):
+def compare_LSTM(N=None):
     '''
-    比较RNN网络系统与pyTorch的梯度计算
+    比较LSTM网络系统与pyTorch的梯度计算
     '''
     N = np.inf if N is None else N
 
@@ -51,14 +51,16 @@ def compare_RNN(N=None):
         n_t = np.random.randint(1, 10)
         X = random_tensor((n_ex, n_in, n_t), standardize=True)
 
-        # initialize RNN layer
-        L1 = RNNCell(n_out=n_out)
+        # initialize LSTM layer
+        L1 = LSTMCell(n_out=n_out)
 
         # forward prop
+        Cs = []
         y_preds = []
         for t in range(n_t):
-            y_pred = L1.forward(X[:, :, t])
-            y_preds += [y_pred]
+            y_pred, Ct = L1.forward(X[:, :, t])
+            y_preds.append(y_pred)
+            Cs.append(Ct)
 
         # backprop
         dLdX = []
@@ -67,41 +69,53 @@ def compare_RNN(N=None):
             dLdXt = L1.backward(dLdAt)
             dLdX.insert(0, dLdXt)
         dLdX = np.dstack(dLdX)
+        y_preds = np.dstack(y_preds)
+        Cs = np.array(Cs)
 
         # get gold standard gradients
-        gold_mod = TorchRNNCell(n_in, n_out, L1.parameters)
+        gold_mod = TorchLSTMCell(n_in, n_out, L1.parameters)
         golds = gold_mod.extract_grads(X)
 
         params = [
             (X, "X"),
-            (np.array(y_preds), "y"),
-            (L1.parameters["ba"].T, "ba"),
-            (L1.parameters["bx"].T, "bx"),
-            (L1.parameters["Wax"].T, "Wax"),
-            (L1.parameters["Waa"].T, "Waa"),
-            (L1.gradients["ba"].T, "dLdBa"),
-            (L1.gradients["bx"].T, "dLdBx"),
-            (L1.gradients["Wax"].T, "dLdWax"),
-            (L1.gradients["Waa"].T, "dLdWaa"),
+            (np.array(Cs), "C"),
+            (y_preds, "y"),
+            (L1.parameters["bo"].T, "bo"),
+            (L1.parameters["bu"].T, "bu"),
+            (L1.parameters["bf"].T, "bf"),
+            (L1.parameters["bc"].T, "bc"),
+            (L1.parameters["Wo"], "Wo"),
+            (L1.parameters["Wu"], "Wu"),
+            (L1.parameters["Wf"], "Wf"),
+            (L1.parameters["Wc"], "Wc"),
+            (L1.gradients["bo"].T, "dLdBo"),
+            (L1.gradients["bu"].T, "dLdBu"),
+            (L1.gradients["bf"].T, "dLdBf"),
+            (L1.gradients["bc"].T, "dLdBc"),
+            (L1.gradients["Wo"], "dLdWo"),
+            (L1.gradients["Wu"], "dLdWu"),
+            (L1.gradients["Wf"], "dLdWf"),
+            (L1.gradients["Wc"], "dLdWc"),
             (dLdX, "dLdX"),
         ]
 
-        print("Trial {}".format(i))
+        print("Case {}".format(i))
         for ix, (mine, label) in enumerate(params):
             np.testing.assert_allclose(
                 mine,
                 golds[label],
                 err_msg=err_fmt(params, golds, ix),
-                atol=1e-3,
-                rtol=1e-3,
+                atol=1e-4,
+                rtol=1e-4,
             )
+
             print("\tPASSED {}".format(label))
         i += 1
 
 
-def test_RNN():
+def test_LSTM():
     '''
-    测试RNN
+    测试LSTM
     '''
     n_ex = 4   # 样本数
     n_in = 25  # 输入数据维度
@@ -112,19 +126,19 @@ def test_RNN():
     y = np.random.random((n_ex, n_out, n_t))
     X = random_tensor((n_ex, n_in, n_t), standardize=True)
 
-    # initialize RNN layer
-    rnn = RNN(n_in, n_out, n_t, optimizer=SGD())
+    # initialize net layer
+    net = LSTM(n_in, n_out, n_t, optimizer=SGD())
     loss_cls = SquaredError()
     for i in range(1000):
-        y_pred = rnn.forward(X)
+        y_pred = net.forward(X)
         loss = loss_cls(y, y_pred)
-        Z = np.dstack(rnn.derived_variables["Z"])
-        grad = loss_cls.grad(y, y_pred, Z, rnn.act_fn)
-        rnn.backward(grad)
-        rnn.update()
+        Z = np.dstack(net.derived_variables["Go"])
+        grad = loss_cls.grad(y, y_pred, Z, net.act_fn)
+        net.backward(grad)
+        net.update()
         print("iter_{:03d} loss:{:.4f}".format(i + 1, np.sum(loss)))
 
 
 if __name__ == "__main__":
-    # compare_RNNCell(100)
-    test_RNN()
+    # compare_LSTM(100)
+    test_LSTM()
